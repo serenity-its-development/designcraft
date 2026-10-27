@@ -1,4 +1,4 @@
-//! DesignCraft's egui frontend: an InDesign-style UI over `designcraft-engine`.
+//! Layout's egui frontend: an InDesign-style UI over `designcraft-engine`.
 //!
 //! The UI is thin: every action goes through [`DesignApp::run`], which dispatches UI commands
 //! (view/window) here and everything else to the engine. Menus, shortcuts, the ⌘K palette and
@@ -341,7 +341,7 @@ pub struct UiState {
     /// Where the Contextual Task Bar was last shown, like [`Self::task_bar_pin`].
     #[serde(skip)]
     pub task_bar_at: Option<[f32; 2]>,
-    /// Help › About DesignCraft is open.
+    /// Help › About Layout is open.
     pub about: bool,
     /// The About window's tab: 0 About, 1 Contributors, 2 Models (`about::ABOUT_TABS`).
     #[serde(skip)]
@@ -577,6 +577,9 @@ pub struct Perf {
 
 pub struct DesignApp {
     pending_pdf: Option<ImportedFile>,
+    /// A host that keeps the file in the format it opened (OneOS: an IDML package stays IDML): Save writes the IDML package, not the
+    /// editor's own `.designcraft` document. Set by the web shell when the host opened an IDML package.
+    pub host_save_idml: bool,
     pub session: Session,
     pub ui: UiState,
     pub services: Services,
@@ -682,6 +685,7 @@ impl DesignApp {
         designcraft_fonts::FontDb::global().scan_in_background();
         DesignApp {
             pending_pdf: None,
+            host_save_idml: false,
             session,
             ui: UiState::default(),
             services,
@@ -970,6 +974,32 @@ impl DesignApp {
     }
 
     /// Handle requests produced by tools/commands (dialogs, view changes, file pickers).
+    /// The assistant's run (OneOS `craft:command`, `command.batch`): all of it as ONE undo step, or none of it
+    /// (`designcraft_engine::host_commands`). The window's own housekeeping follows an engine run like any other.
+    pub fn run_batch(&mut self, params: &Value) -> Result<Value, String> {
+        let r = self.session.run_command_batch(params);
+        self.after_engine();
+        r
+    }
+
+    /// Put the view where the host's read-only first view was left (OneOS progressive open): how far down the document it was
+    /// scrolled (`y_fraction`, 0 top to 1 end) as the same fraction of the pages. A view is not an edit: no undo step, nothing dirty.
+    /// Returns whether the view moved.
+    pub fn open_at_first_view(&mut self, y_fraction: f64) -> bool {
+        let Some(pages) = self.session.active().map(|d| d.doc.page_count()) else { return false };
+        if pages < 2 || !(y_fraction.is_finite() && y_fraction > 0.0) {
+            return false;
+        }
+        let page = ((pages - 1) as f64 * y_fraction.clamp(0.0, 1.0)).round() as usize;
+        canvas::go_to_page(self, page);
+        true
+    }
+
+    /// Whether any open document has unsaved changes.
+    pub fn has_unsaved(&self) -> bool {
+        self.session.documents().iter().any(|d| d.is_dirty())
+    }
+
     pub fn after_engine(&mut self) {
         let reqs = std::mem::take(&mut self.session.ui_requests);
         for r in reqs {
@@ -1399,7 +1429,7 @@ impl DesignApp {
 
     /// A file dropped on the window: documents open, the swatches in a swatch exchange (.ase) file
     /// are loaded, and anything else is placed on the spread in view (a parent spread while parents
-    /// are being edited). A file without an extension opens when its content is a DesignCraft or
+    /// are being edited). A file without an extension opens when its content is a Layout or
     /// IDML document.
     pub fn open_dropped(&mut self, path: &str) -> Result<Value, String> {
         self.open_dropped_at(path, None)
@@ -1767,7 +1797,7 @@ pub fn cjk_features(app: &DesignApp) -> bool {
     app.session.prefs.cjk_features.unwrap_or_else(|| i18n::is_cjk(&app.ui.language))
 }
 
-/// Files that open as documents (when dropped or picked) rather than being placed: DesignCraft,
+/// Files that open as documents (when dropped or picked) rather than being placed: Layout,
 /// IDML, and InDesign documents and templates (converted to IDML on open).
 pub fn opens_as_document(name: &str) -> bool {
     let n = name.to_ascii_lowercase();

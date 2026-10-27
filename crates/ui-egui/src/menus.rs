@@ -22,7 +22,7 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
     ("app.placeDialog", "Place…", Some("Cmd+D"), "{}"),
     ("app.saveDialog", "Save As…", Some("Cmd+Shift+S"), "{}"),
     ("app.save", "Save", Some("Cmd+S"), "{}"),
-    ("app.quit", "Quit DesignCraft", Some("Cmd+Q"), "{} — close the window; each document with unsaved changes asks first"),
+    ("app.quit", "Quit Layout", Some("Cmd+Q"), "{} — close the window; each document with unsaved changes asks first"),
     ("app.saveCopyDialog", "Save a Copy…", Some("Cmd+Alt+S"), "{} — choose where to write a copy (the document stays as it is)"),
     ("app.loadSwatches", "Load Swatches…", None, "{} — pick a swatch exchange (.ase) file"),
     (
@@ -306,15 +306,9 @@ pub const UI_COMMANDS: &[(&str, &str, Option<&str>, &str)] = &[
         "{on?: bool, at?: [x, y] (points from the canvas's top-left)} — the Contextual Task Bar stays where it is (or at `at`) instead of following the selection; with neither, toggles",
     ),
     ("window.taskBarReset", "Reset Bar Position", None, "{} — the Contextual Task Bar follows the selection again, under it"),
-    ("help.discord", "Join the ArtCraft Discord…", None, "{} — opens https://discord.gg/artcraft in the browser"),
-    ("help.appPage", "DesignCraft Website…", None, "{} — opens https://getartcraft.com/apps/designcraft"),
-    ("help.github", "DesignCraft on GitHub…", None, "{} — opens https://github.com/storytold/designcraft"),
-    ("help.issues", "Report an Issue…", None, "{} — opens the GitHub issue tracker"),
-    ("help.website", "ArtCraft Website…", None, "{} — opens https://getartcraft.com"),
-    ("help.app", "ArtCraft App Page…", None, "{app} — opens https://getartcraft.com/apps/{app} (e.g. photocraft)"),
     (
         "help.about",
-        "About DesignCraft",
+        "About Layout",
         None,
         "{open?: true, tab?: \"about\"|\"contributors\"|\"models\"} — the About window: splash with community links, contributor and model credits (open: false closes it)",
     ),
@@ -950,13 +944,6 @@ pub const MENUS: &[(&str, &[&str])] = &[
     (
         "Help",
         &[
-            "ui:help.discord",
-            "-",
-            "ui:help.appPage",
-            "ui:help.github",
-            "ui:help.issues",
-            "ui:help.website",
-            "-",
             "cmd:file.newSample",
             "-",
             "ui:help.about",
@@ -981,7 +968,7 @@ pub const CLASSIC_GROUPS: &[&[&str]] = &[
 ];
 
 /// The Typography preset's available panels in the order observed in InDesign's workspace.
-/// CC Libraries has no corresponding DesignCraft panel, and where the Story panel sits in it is
+/// CC Libraries has no corresponding Layout panel, and where the Story panel sits in it is
 /// not recorded, so these groups leave it out.
 pub const TYPOGRAPHY_GROUPS: &[&[&str]] = &[
     &["pages", "layers", "swatches"],
@@ -1890,19 +1877,6 @@ fn run_ui_inner(app: &mut DesignApp, id: &str, p: &Value) -> Option<Result<Value
             app.ui.about = p.get("open").and_then(Value::as_bool).unwrap_or(true);
             Ok(json!(app.ui.about))
         }
-        "help.app" => match p.get("app").and_then(Value::as_str) {
-            Some(slug) if !slug.is_empty() && slug.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') => {
-                let url = format!("{}/apps/{slug}", designcraft_engine::links::WEBSITE);
-                app.ui.pending_urls.push(url.clone());
-                Ok(json!({"url": url}))
-            }
-            _ => Err("help.app: give `app` (e.g. \"photocraft\")".into()),
-        },
-        h if h.starts_with("help.") && designcraft_engine::links::get(&h[5..]).is_some() => {
-            let url = designcraft_engine::links::get(&h[5..]).unwrap_or_default().to_string();
-            app.ui.pending_urls.push(url.clone());
-            Ok(json!({"url": url}))
-        }
         "window.toolsDoubleColumn" => flag(&mut app.ui.tools_double_column),
         "window.collapseToIcons" => {
             app.ui.dock_expanded = false;
@@ -2058,13 +2032,16 @@ fn set_screen_mode(app: &mut DesignApp, mode: ScreenMode) {
 }
 
 fn download_document(app: &mut DesignApp) -> Result<Value, String> {
-    let name = app.session.active().map(|d| format!("{}.designcraft", d.doc.title)).ok_or("no document")?;
-    let ser = app.run("file.serialize", json!({}))?;
+    // A host that keeps an IDML package as IDML (`host_save_idml`) is handed the IDML package under the `.idml` name.
+    let (ext, command) = if app.host_save_idml { ("idml", "file.exportIdml") } else { ("designcraft", "file.serialize") };
+    let name = app.session.active().map(|d| format!("{}.{ext}", d.doc.title)).ok_or("no document")?;
+    let ser = app.run(command, json!({}))?;
     let bytes = designcraft_engine::cmd::base64_decode(ser["base64"].as_str().unwrap_or_default());
     let download = app.services.download.as_mut().ok_or("no download service")?;
     download(&name, &bytes).map_err(|e| format!("could not download {name}: {e}"))?;
     // Marks the document saved; on the web the engine doesn't touch a file system.
-    app.run("file.saveAs", json!({"path": name}))
+    let mark = app.session.active().map(|d| format!("{}.designcraft", d.doc.title)).unwrap_or(name);
+    app.run("file.saveAs", json!({"path": mark}))
 }
 
 fn export_png(app: &mut DesignApp, p: &Value) -> Result<Value, String> {
@@ -2403,8 +2380,7 @@ pub enum AppMenuItem {
 
 /// The macOS application menu. Settings… is `app.preferences`, which `native_menu_tree` leaves out of Edit.
 pub const MAC_APP_MENU: &[AppMenuItem] = &[
-    AppMenuItem::Cmd { id: "dc-about", label: "About DesignCraft", command: "help.about" },
-    AppMenuItem::Cmd { id: "dc-discord", label: "Join the ArtCraft Discord…", command: "help.discord" },
+    AppMenuItem::Cmd { id: "dc-about", label: "About Layout", command: "help.about" },
     AppMenuItem::Sep,
     AppMenuItem::Cmd { id: "dc-settings", label: "Settings…", command: "app.preferences" },
     AppMenuItem::Language,
@@ -2416,7 +2392,7 @@ pub const MAC_APP_MENU: &[AppMenuItem] = &[
     AppMenuItem::ShowAll,
     AppMenuItem::Sep,
     // Not the predefined Quit: it terminates the app at once, past the unsaved-changes prompt.
-    AppMenuItem::Cmd { id: "dc-quit", label: "Quit DesignCraft", command: "app.quit" },
+    AppMenuItem::Cmd { id: "dc-quit", label: "Quit Layout", command: "app.quit" },
 ];
 
 /// A label as the macOS menu bar library takes it: it reads "&" as a mnemonic marker and drops
@@ -3400,7 +3376,6 @@ const NOT_SEARCHED: &[&str] = &[
     "window.panel.closeGroup",
     // A window edge, an app page, a recent file, a swatch or color group.
     "window.resize",
-    "help.app",
     "app.openRecent",
     "app.swatchOptionsDialog",
     "app.colorGroupOptionsDialog",
@@ -6192,7 +6167,7 @@ mod tests {
         let app = crate::DesignApp::new(designcraft_engine::Session::new(), crate::Services::default());
         assert!(app.session.active().is_none());
         let ids: Vec<&str> = UI_COMMANDS.iter().map(|c| c.0).filter(|id| id.starts_with("help.")).collect();
-        assert!(ids.contains(&"help.discord") && ids.contains(&"help.github"), "{ids:?}");
+        assert!(ids.contains(&"help.about"), "{ids:?}");
         for id in ids {
             assert!(menu_enabled(&app, id), "{id} must work from the start screen");
         }

@@ -41,13 +41,13 @@ pub fn start() {
         if let Err(e) = create_error_panel(&document) {
             log::error!("couldn't create graphics error panel: {e:?}");
             if let Some(el) = document.get_element_by_id(LOADING_ID) {
-                el.set_text_content(Some("DesignCraft couldn't start. Reload this page to try again."));
+                el.set_text_content(Some("Layout couldn't start. Reload this page to try again."));
             }
             return;
         }
         let graphics = GraphicsState::default();
         let Some(canvas) = document.get_element_by_id(CANVAS_ID).and_then(|e| e.dyn_into::<web_sys::HtmlCanvasElement>().ok()) else {
-            graphics_failed(&graphics, "DesignCraft failed to start", "Reload this page to try again.", &format!("Missing canvas {CANVAS_ID}."));
+            graphics_failed(&graphics, "Layout failed to start", "Reload this page to try again.", &format!("Missing canvas {CANVAS_ID}."));
             return;
         };
         let mut options = eframe::WebOptions::default();
@@ -72,11 +72,28 @@ pub fn start() {
                         });
                     }
                     let inbox: Inbox = Inbox::default();
-                    let mut app = DesignApp::new(Session::new(), services(inbox.clone(), cc.egui_ctx.clone()));
+                    let mut svc = services(inbox.clone(), cc.egui_ctx.clone());
+                    // Framed by OneOS (the frame page declared the ONE parent origin): the parent opens the document in it and stores
+                    // what it saves, runs the assistant's allow-listed commands, and takes the progressive open's hand-over. Every
+                    // save and export goes to the host (never a download): the opened file under its own name is a new version of
+                    // it, anything else a copy.
+                    let hosted = crate::host::Bridge::new().map(|bridge| {
+                        let runs = crate::host::Runs::default();
+                        let notices = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+                        let idml = std::rc::Rc::new(std::cell::Cell::new(false));
+                        bridge.listen(inbox.clone(), runs.clone(), notices.clone(), idml.clone(), cc.egui_ctx.clone());
+                        let save = bridge.clone();
+                        svc.download = Some(Box::new(move |name: &str, bytes: &[u8]| save.post_save(name, bytes)));
+                        let save = bridge.clone();
+                        svc.write = Some(Box::new(move |name: &str, bytes: &[u8]| save.post_save(name, bytes)));
+                        bridge.post_ready();
+                        Hosted { bridge, reported: crate::host::DirtyReport::default(), runs, notices, idml, handoff: crate::handoff::Handoff::new() }
+                    });
+                    let mut app = DesignApp::new(Session::new(), svc);
                     if has_query_flag(&query(), "sample") {
                         let _ = app.run("file.newSample", serde_json::json!({}));
                     }
-                    Ok(Box::new(WebShell { app, inbox, graphics: creator_graphics }))
+                    Ok(Box::new(WebShell { app, inbox, graphics: creator_graphics, hosted }))
                 }),
             )
             .await;
@@ -98,9 +115,12 @@ pub fn start() {
                 }
             }
             Err(e) => {
+                if let Some(bridge) = crate::host::Bridge::new() {
+                    bridge.post_failed(&format!("{e:?}"));
+                }
                 graphics_failed(
                     &graphics,
-                    "DesignCraft failed to start",
+                    "Layout failed to start",
                     "Reload this page to try again. A browser with WebGPU or WebGL2 is required.",
                     &format!("{e:?}"),
                 );
@@ -345,6 +365,36 @@ struct WebShell {
     app: DesignApp,
     inbox: Inbox,
     graphics: GraphicsState,
+    hosted: Option<Hosted>,
+}
+
+/// What OneOS framing adds: the bridge, the dirty state last reported, the assistant's runs and the host's notices waiting for the
+/// next frame, whether the host opened an IDML package, and the progressive open's hand-over (keyed by the document the app shows).
+struct Hosted {
+    bridge: crate::host::Bridge,
+    reported: crate::host::DirtyReport,
+    runs: crate::host::Runs,
+    notices: std::rc::Rc<std::cell::RefCell<Vec<String>>>,
+    idml: std::rc::Rc<std::cell::Cell<bool>>,
+    handoff: crate::handoff::Handoff<Option<u64>>,
+}
+
+fn shown(app: &DesignApp) -> Option<u64> {
+    app.session.active().map(|d| d.uid)
+}
+
+impl Hosted {
+    /// The assistant's runs, each ONE undo step (or none): answered to the host on the session it was asked in.
+    fn run_commands(&self, app: &mut DesignApp) {
+        app.host_save_idml = self.idml.get();
+        for run in std::mem::take(&mut *self.runs.borrow_mut()) {
+            let outcome = app.run_batch(&run.params);
+            self.bridge.post_result(run.id, outcome);
+        }
+        for notice in std::mem::take(&mut *self.notices.borrow_mut()) {
+            app.status(notice);
+        }
+    }
 }
 
 impl eframe::App for WebShell {
@@ -367,7 +417,21 @@ impl eframe::App for WebShell {
                     }
                 });
             }
+            if let Some(h) = self.hosted.as_mut() {
+                h.handoff.before(&h.bridge, shown(&self.app));
+            }
             self.app.logic(ctx);
+            if let Some(h) = self.hosted.as_mut() {
+                h.run_commands(&mut self.app);
+                h.bridge.report_dirty(&self.app, &h.reported);
+                let doc = shown(&self.app);
+                let app = &mut self.app;
+                if h.handoff.after(&h.bridge, doc, |view| {
+                    app.open_at_first_view(view.y_fraction());
+                }) {
+                    ctx.request_repaint();
+                }
+            }
         });
     }
 
@@ -400,7 +464,7 @@ fn services(inbox: Inbox, ctx: egui::Context) -> Services {
             } else if request.purpose == "place" {
                 rfd::AsyncFileDialog::new().add_filter("Graphics", IMAGE_EXTS)
             } else {
-                rfd::AsyncFileDialog::new().add_filter("DesignCraft, IDML or InDesign", DOC_EXTS)
+                rfd::AsyncFileDialog::new().add_filter("Layout, IDML or InDesign", DOC_EXTS)
             };
             wasm_bindgen_futures::spawn_local(async move {
                 let Some(file) = dialog.pick_file().await else {

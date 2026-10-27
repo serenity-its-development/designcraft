@@ -3,7 +3,7 @@
 //!
 //! The file lists items under `Product area : <area>` headers, one per line:
 //! `<name> --- [none defined]` or `<name> --- <context>: <keys>, <context>: <keys>`. Item names
-//! use `: ` between submenu levels. Only the Default context applies (DesignCraft has no
+//! use `: ` between submenu levels. Only the Default context applies (Layout has no
 //! shortcut contexts); a type command with no Default entry takes its Text entry.
 
 use std::collections::{BTreeSet, HashMap};
@@ -141,7 +141,7 @@ enum Mod {
 }
 
 /// Keys as InDesign writes them (`Shift+Ctrl+S`, `Ctrl+Num 5`, `Page Down`, `⇧⌘S`) as a
-/// DesignCraft shortcut string (`Cmd+Shift+S`). Ctrl is the command modifier in a Windows set.
+/// Layout shortcut string (`Cmd+Shift+S`). Ctrl is the command modifier in a Windows set.
 fn read_keys(keys: &str, mac: bool) -> Result<String, &'static str> {
     const SYMBOLS: &[(&str, Mod)] = &[("⌘", Mod::Command), ("⌥", Mod::Alt), ("⇧", Mod::Shift), ("⌃", Mod::Control)];
     const WORDS: &[(&str, Mod)] = &[
@@ -238,7 +238,7 @@ fn norm(s: &str) -> String {
     ["show/hide ", "show ", "hide "].iter().find_map(|p| s.strip_prefix(p).filter(|r| !r.is_empty())).map_or(s.clone(), str::to_string)
 }
 
-/// DesignCraft's commands by menu path and label.
+/// Layout's commands by menu path and label.
 #[derive(Default)]
 struct Index {
     /// `menu\nsubmenu\nlabel` → ids, in the menu bar.
@@ -333,7 +333,7 @@ fn add_path(map: &mut HashMap<String, BTreeSet<String>>, path: &[String], label:
     map.entry(key).or_default().insert(id.to_string());
 }
 
-/// What the set says about one DesignCraft command, over every item matched to it.
+/// What the set says about one Layout command, over every item matched to it.
 struct Decision {
     id: String,
     item: String,

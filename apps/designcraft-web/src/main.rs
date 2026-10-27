@@ -1,4 +1,4 @@
-//! DesignCraft in the browser.
+//! Layout in the browser.
 //!
 //! Runs the same [`designcraft_ui_egui::DesignApp`] as the desktop app through eframe's web
 //! runner (wgpu: WebGPU where available, WebGL2 otherwise). Build with `trunk build --release`
@@ -18,6 +18,12 @@
 
 #[cfg(any(target_arch = "wasm32", test))]
 mod browser_policy;
+
+#[cfg(any(target_arch = "wasm32", test))]
+mod handoff;
+
+#[cfg(target_arch = "wasm32")]
+mod host;
 
 #[cfg(target_arch = "wasm32")]
 mod web;

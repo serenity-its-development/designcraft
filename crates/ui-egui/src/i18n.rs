@@ -1620,8 +1620,8 @@ const TABLE: &[(&str, [&str; 5])] = &[
         ["Spreads of up to 10 pages", "Planches de 10 pages maximum", "Spreads of up to 10 pages", "Spreads of up to 10 pages", "最多10页的跨页"],
     ),
     ("for", ["for", "pour", "por", "に対して", "行"]),
-    ("About DesignCraft", ["About DesignCraft", "À propos de DesignCraft", "About DesignCraft", "About DesignCraft", "关于 DesignCraft"]),
-    ("Quit DesignCraft", ["DesignCraft beenden", "Quitter DesignCraft", "Salir de DesignCraft", "DesignCraft を終了", "退出 DesignCraft"]),
+    ("About Layout", ["About Layout", "À propos de Layout", "About Layout", "About Layout", "关于 Layout"]),
+    ("Quit Layout", ["Layout beenden", "Quitter Layout", "Salir de Layout", "Layout を終了", "退出 Layout"]),
     ("Accept All Changes", ["Accept All Changes", "Accepter toutes les modifications", "Accept All Changes", "Accept All Changes", "接受所有更改"]),
     ("Activate Document", ["Activate Document", "Activer le document", "Activate Document", "Activate Document", "激活文档"]),
     ("Add Anchor Point", ["Add Anchor Point", "Ajouter un point d'ancrage", "Add Anchor Point", "Add Anchor Point", "添加锚点"]),
@@ -1836,12 +1836,12 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ),
     ("Delete Workspace…", ["Delete Workspace…", "Supprimer l'espace de travail…", "Delete Workspace…", "Delete Workspace…", "删除工作区…"]),
     (
-        "DesignCraft Website…",
-        ["DesignCraft Website…", "Site web de DesignCraft…", "DesignCraft Website…", "DesignCraft Website…", "DesignCraft 网站…"],
+        "Layout Website…",
+        ["Layout Website…", "Site web de Layout…", "Layout Website…", "Layout Website…", "Layout 网站…"],
     ),
     (
-        "DesignCraft on GitHub…",
-        ["DesignCraft on GitHub…", "DesignCraft sur GitHub…", "DesignCraft on GitHub…", "DesignCraft on GitHub…", "DesignCraft 在 GitHub 上…"],
+        "Layout on GitHub…",
+        ["Layout on GitHub…", "Layout sur GitHub…", "Layout on GitHub…", "Layout on GitHub…", "Layout 在 GitHub 上…"],
     ),
     (
         "Detach All Objects from Parent",
@@ -2646,7 +2646,6 @@ const TABLE: &[(&str, [&str; 5])] = &[
         ["Cross-Reference Format", "Format de référence croisée", "Cross-Reference Format", "Cross-Reference Format", "交叉引用格式"],
     ),
     ("Delete Workspace", ["Delete Workspace", "Supprimer l'espace de travail", "Delete Workspace", "Delete Workspace", "删除工作区"]),
-    ("DesignCraft", ["DesignCraft", "DesignCraft", "DesignCraft", "DesignCraft", "DesignCraft"]),
     ("Display Performance", ["Display Performance", "Performances d'affichage", "Display Performance", "Display Performance", "显示性能"]),
     ("Document Grid", ["Document Grid", "Grille du document", "Document Grid", "Document Grid", "文档网格"]),
     (
@@ -3006,8 +3005,8 @@ const TABLE: &[(&str, [&str; 5])] = &[
     ("Utilities", ["Utilities", "Utilitaires", "Utilities", "Utilities", "实用程序"]),
     ("Variable Font", ["Variable Font", "Police variable", "Variable Font", "Variable Font", "可变字体"]),
     (
-        "Welcome to DesignCraft",
-        ["Welcome to DesignCraft", "Bienvenue dans DesignCraft", "Welcome to DesignCraft", "Welcome to DesignCraft", "欢迎使用 DesignCraft"],
+        "Welcome to Layout",
+        ["Welcome to Layout", "Bienvenue dans Layout", "Welcome to Layout", "Welcome to Layout", "欢迎使用 Layout"],
     ),
     ("When Scaling", ["When Scaling", "Lors du redimensionnement", "When Scaling", "When Scaling", "缩放时"]),
     ("[Basic] (working) ▾", ["[Basic] (working) ▾", "[De base] (de travail) ▾", "[Basic] (working) ▾", "[Basic] (working) ▾", "[基本] (工作区) ▾"]),
@@ -5037,7 +5036,6 @@ mod tests {
         keys.extend(designcraft_tools::TOOL_GROUPS.iter().flat_map(|group| group.iter()).map(|tool| tool.label));
         // So do the About window's tab names, app descriptions and the credits' column and sort labels.
         keys.extend(crate::about::ABOUT_TABS);
-        keys.extend(crate::about::SIBLINGS.iter().map(|(_, _, what)| *what));
         keys.extend(crate::credits::NameMode::ALL.iter().map(|mode| mode.label()));
         keys.extend(crate::credits::SortKey::ALL.iter().flat_map(|key| [key.label().0, key.label().1]));
         // UI labels passed to `tr` that no other catalog has yet.
@@ -5078,7 +5076,7 @@ mod tests {
             "Auto Rename",
             "Character Style",
             "Company",
-            "DesignCraft page",
+            "Layout page",
             "Equal fixed heights for the selected rows; cell text may become overset.",
             "Found",
             "Grab bag",

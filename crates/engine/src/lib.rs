@@ -14,6 +14,7 @@ pub mod cmd;
 pub mod dtd;
 pub mod file_access;
 pub mod guard;
+pub mod host_commands;
 pub mod io;
 pub mod links;
 pub mod math;
@@ -772,3 +773,5 @@ mod tests_params;
 mod tests_roots;
 #[cfg(test)]
 mod tests_table;
+#[cfg(test)]
+mod host_commands_tests;

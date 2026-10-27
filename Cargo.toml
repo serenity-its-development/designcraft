@@ -129,3 +129,12 @@ hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "9f75
 hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef", version = "=0.7.2" }
 hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef", version = "=0.3.0" }
 hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "9f75d3dc19b4b514c4f3d4847ed1ec1b0e86b4ef", version = "=0.1.0" }
+
+# The size profile of the OneOS web build (opt-level z, fat LTO, panic abort): the upstream release build is far over the 25 MiB a static asset may be.
+[profile.web-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+panic = "abort"
+codegen-units = 1
+debug = 0
