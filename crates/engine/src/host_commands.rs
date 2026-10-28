@@ -12,104 +12,419 @@ use serde_json::{Value, json};
 
 use crate::Session;
 
-/// Registry commands the assistant may run. Each acts at once on the document (no dialog, no file picker, no pointer gesture), and
-/// none is Undo or Redo: undoing a run is the person's.
+/// Registry commands the assistant may run: EVERY command of the registry except those in [`LEFT_OUT`], each with its reason.
+/// The document's whole command registry (frames, text, tables, styles, swatches, pages, parents, layers, effects, links, data merge). A step the document's state forbids, or one that needs a dialog or a pointer, is refused by the registry exactly as it would be for
+/// the person, and the run is taken back whole.
 pub const ASSISTANT_COMMANDS: &[&str] = &[
-    // Make things.
-    "frame.create",
-    "line.create",
-    "frame.grid",
-    "table.insert",
-    "text.insert",
-    "story.setText",
-    "story.replaceRange",
+    // anchored
+    "anchored.insert",
+    "anchored.options",
+    "anchored.release",
+    "anchored.list",
+    // path
+    "path.addAnchor",
+    "path.deleteAnchor",
+    "path.convertAnchor",
+    "path.erase",
+    "path.smooth",
+    "path.join",
+    "path.convertPoints",
+    // article
+    "article.list",
+    "article.new",
+    "article.add",
+    "article.remove",
+    "article.options",
+    "article.delete",
+    // button
+    "button.set",
+    "button.clear",
+    // form
+    "form.set",
+    "form.clear",
+    "form.list",
+    // button
+    "button.list",
+    // object
+    "object.caption",
+    // changes
+    "changes.track",
+    "changes.list",
+    "changes.accept",
+    "changes.reject",
+    "changes.acceptAll",
+    "changes.rejectAll",
+    // color
+    "color.extractTheme",
+    // swatch
+    "swatch.addColorTheme",
+    // color
+    "color.convert",
+    // condition
+    "condition.list",
+    "condition.new",
+    "condition.options",
+    "condition.delete",
+    "condition.apply",
+    // data
+    "data.source.select",
+    "data.source.update",
+    "data.source.remove",
+    "data.placeholder.add",
+    "data.placeholder.remove",
+    "data.options",
+    "data.preview",
+    "data.preview.stop",
+    "data.merge",
+    // selection
+    "selection.set",
+    "selection.toggle",
+    "selection.key",
+    // edit
+    "edit.selectAll",
+    "edit.deselectAll",
+    "edit.clear",
+    "edit.copy",
+    "edit.cut",
+    "edit.pasteWithoutFormatting",
+    "edit.paste",
+    "edit.pasteInto",
+    "edit.pasteInPlace",
+    "edit.duplicate",
+    "edit.commitPreview",
+    "edit.cancelPreview",
+    // note
+    "note.new",
+    "note.convertFromText",
+    "note.edit",
+    "note.delete",
+    "note.convertToText",
+    "note.list",
+    // endnote
+    "endnote.insert",
+    "endnote.edit",
+    "endnote.delete",
+    "endnote.list",
+    "endnote.options",
+    // find
+    "find.objects",
+    "find.changeObjects",
+    "find.find",
+    "find.change",
+    "find.next",
+    // flex
+    "flex.add",
+    "flex.convert",
+    "flex.remove",
+    "flex.set",
+    "flex.reorder",
+    // font
+    "font.list",
+    "font.replace",
+    // guide
     "guide.add",
     "guide.move",
     "guide.moveBy",
     "guide.delete",
     "guide.deleteAll",
-    // Pages, spreads, parents and layers.
+    // view
+    "view.lockColumnGuides",
+    // guide
+    "guide.deselect",
+    // layout
+    "layout.createGuides",
+    // index
+    "index.addReference",
+    "index.list",
+    "index.generate",
+    "index.update",
+    // document
+    "document.inspect",
+    "document.list",
+    // tool
+    "tool.select",
+    "tool.list",
+    // document
+    "document.history",
+    // hyperlink
+    "hyperlink.create",
+    "hyperlink.delete",
+    "hyperlink.list",
+    "hyperlink.edit",
+    "hyperlink.goToSource",
+    // bookmark
+    "bookmark.rename",
+    "bookmark.add",
+    "bookmark.delete",
+    "bookmark.list",
+    // layout
     "layout.pages.insert",
+    "layout.rotateSpreadView",
     "layout.pages.delete",
     "layout.pages.move",
     "layout.pages.duplicateSpread",
     "layout.pages.applyParent",
     "layout.parents.new",
-    "layout.pageSize",
+    "layout.parents.delete",
+    "layout.parents.options",
     "layout.marginsAndColumns",
-    "layout.createGuides",
+    "layout.moveColumnGuide",
+    "layout.documentSetup",
+    "layout.pages.toSpread",
+    "layout.spreadShuffle",
+    "layout.pageSize",
+    "layout.pageOptions",
+    "layout.section",
+    "layout.chapterNumbering",
+    "layout.numberingOptions",
+    // layer
+    "layer.move",
+    "layer.selectItems",
     "layer.new",
     "layer.set",
     "layer.delete",
-    "layer.move",
-    // Structure: order, groups, lock and visibility.
-    "object.group",
-    "object.ungroup",
+    "layer.merge",
+    "layer.deleteUnused",
+    "layer.others",
+    "layer.activate",
+    // conveyor
+    "conveyor.collect",
+    "conveyor.place",
+    "conveyor.list",
+    "conveyor.clear",
+    // story
+    "story.placeAndLink",
+    "story.links",
+    "story.updateLink",
+    "story.unlink",
+    // links
+    "links.list",
+    "links.update",
+    "links.embed",
+    "links.goTo",
+    // liquid
+    "liquid.pageRule",
+    "liquid.object",
+    // guide
+    "guide.liquid",
+    // layout
+    "layout.createAlternate",
+    // list
+    "list.bullets",
+    "list.numbers",
+    "list.define",
+    "list.delete",
+    // style
+    "style.load.list",
+    // math
+    "math.insert",
+    "math.svg",
+    // media
+    "media.options",
+    "media.get",
+    // footnote
+    "footnote.insert",
+    "footnote.options",
+    "footnote.list",
+    "footnote.setText",
+    "footnote.delete",
+    // frame
+    "frame.create",
+    // line
+    "line.create",
+    // transform
+    "transform.move",
+    "transform.resize",
+    "transform.rotate",
+    "transform.scale",
+    "transform.again",
+    "transform.clear",
+    "transform.shear",
+    // object
+    "object.matchAttributes",
+    // transform
+    "transform.flip",
+    "transform.set",
+    "transform.info",
+    // object
     "object.arrange",
     "object.bringToFront",
     "object.bringForward",
     "object.sendBackward",
     "object.sendToBack",
+    "object.group",
+    "object.ungroup",
     "object.lock",
     "object.unlockAll",
     "object.hide",
     "object.showAll",
-    "object.setLayer",
-    "object.reorder",
-    "object.rename",
-    "object.align",
-    "object.distribute",
-    "edit.duplicate",
-    "edit.clear",
-    "edit.stepAndRepeat",
-    // Place and size.
-    "transform.move",
-    "transform.resize",
-    "transform.rotate",
-    "transform.scale",
-    "transform.shear",
-    "transform.flip",
-    "transform.set",
-    // Properties: paint, effects, frames and their content.
+    "object.setFlags",
     "object.fill",
-    "object.stroke",
     "object.swapFillStroke",
+    "object.defaultFillStroke",
+    "object.stroke",
     "object.opacity",
     "object.dropShadow",
     "object.innerShadow",
     "object.outerGlow",
+    "object.exportOptions",
     "object.innerGlow",
+    "object.bevel",
+    "object.satin",
+    "object.directionalFeather",
+    "object.effects",
     "object.feather",
-    "object.gradient",
-    "object.color",
     "object.content",
-    "object.fit",
-    "object.fittingOptions",
     "object.textFrameOptions",
     "object.cornerOptions",
     "object.textWrap",
-    "object.convertShape",
-    "object.altText",
+    "object.fit",
+    "object.fittingOptions",
+    "object.rename",
+    // edit
+    "edit.stepAndRepeat",
+    // path
+    "path.create",
+    "path.appendAnchor",
+    "path.setAnchor",
+    "path.reverse",
+    "path.close",
+    "path.moveAnchors",
+    // object
+    "object.align",
+    "object.distribute",
+    // gap
+    "gap.move",
+    // frame
+    "frame.grid",
+    // object
+    "object.clippingPath",
+    "object.clippingPathOptions",
+    "object.primaryTextFrame",
+    "object.attributes",
+    "object.globalLight",
     "object.label",
-    // Text.
-    "type.char",
-    "type.para",
-    "type.align",
-    "type.alignLeft",
-    "type.alignCenter",
-    "type.alignRight",
-    "type.justify",
-    "type.bold",
-    "type.italic",
-    "type.underline",
-    "type.allCaps",
-    "type.changeCase",
-    "type.sizeUp",
-    "type.sizeDown",
-    "text.thread",
-    "text.unthread",
-    "story.options",
-    // Tables.
+    "object.altText",
+    "object.transparencyGroup",
+    "object.findByLabel",
+    "object.setLayer",
+    "object.reorder",
+    // layout
+    "layout.overrideParentItems",
+    "layout.removeOverrides",
+    "layout.detachAll",
+    // edit
+    "edit.pasteSvg",
+    // type
+    "type.onPath",
+    "type.pathOptions",
+    // object
+    "object.makeCompoundPath",
+    "object.releaseCompoundPath",
+    // type
+    "type.createOutlines",
+    // object
+    "object.pathfinder",
+    "object.gradientFeather",
+    // path
+    "path.split",
+    // object
+    "object.pdfLayers",
+    "object.layerOptions",
+    // preflight
+    "preflight.run",
+    // edit
+    "edit.transparencyBlendSpace",
+    // document
+    "document.preferences",
+    // object
+    "object.qrCode",
+    // select
+    "select.firstAbove",
+    "select.nextAbove",
+    "select.nextBelow",
+    "select.lastBelow",
+    "select.container",
+    "select.content",
+    "select.nextInGroup",
+    "select.previousInGroup",
+    // object
+    "object.convertShape",
+    // spelling
+    "spelling.check",
+    // hyphenation
+    "hyphenation.addException",
+    "hyphenation.removeException",
+    "hyphenation.list",
+    // spelling
+    "spelling.setWords",
+    "spelling.words",
+    "spelling.addWord",
+    "spelling.change",
+    // states
+    "states.create",
+    "states.list",
+    "states.show",
+    "states.rename",
+    "states.release",
+    // strokeStyle
+    "strokeStyle.list",
+    "strokeStyle.new",
+    "strokeStyle.delete",
+    // style
+    "style.compositeFont.list",
+    "style.compositeFont.set",
+    "style.exportTag",
+    "style.paragraph.apply",
+    "style.character.apply",
+    "style.paragraph.redefine",
+    "style.character.redefine",
+    "style.paragraph.create",
+    "style.paragraph.edit",
+    "style.paragraph.delete",
+    "style.character.create",
+    "style.character.edit",
+    "style.character.delete",
+    "style.list",
+    "style.object.apply",
+    "style.object.create",
+    "style.object.edit",
+    "style.object.clearOverrides",
+    // swatch
+    "swatch.create",
+    "swatch.new",
+    // object
+    "object.gradient",
+    // style
+    "style.group",
+    // object
+    "object.color",
+    // color
+    "color.sample",
+    // swatch
+    "swatch.addToSwatches",
+    "swatch.options",
+    "swatch.addUnnamed",
+    "swatch.delete",
+    // ink
+    "ink.list",
+    "ink.options",
+    // swatch
+    "swatch.newColorGroup",
+    "swatch.moveToGroup",
+    "swatch.ungroupColorGroup",
+    "swatch.renameColorGroup",
+    // style
+    "style.cell.create",
+    "style.cell.apply",
+    "style.cell.edit",
+    "style.table.create",
+    "style.table.apply",
+    "style.table.edit",
+    // table
+    "table.insert",
+    "table.convertFromText",
+    "table.convertToText",
     "table.insertRow",
     "table.insertRowAbove",
     "table.insertRowBelow",
@@ -118,45 +433,197 @@ pub const ASSISTANT_COMMANDS: &[&str] = &[
     "table.insertColumnRight",
     "table.deleteRow",
     "table.deleteColumn",
+    "table.delete",
     "table.merge",
+    "table.dropCells",
+    "table.placeGraphic",
+    "table.textCell",
+    "table.moveRow",
+    "table.moveColumn",
+    "table.sortRows",
     "table.unmerge",
+    "table.splitHorizontally",
+    "table.splitVertically",
     "table.setCell",
     "table.setRowHeight",
     "table.setColumnWidth",
-    "table.distributeRows",
+    "table.resizeBorder",
     "table.distributeColumns",
-    // Styles and swatches.
-    "style.paragraph.create",
-    "style.paragraph.edit",
-    "style.paragraph.apply",
-    "style.paragraph.delete",
-    "style.character.create",
-    "style.character.edit",
-    "style.character.apply",
-    "style.character.delete",
-    "style.object.create",
-    "style.object.edit",
-    "style.object.apply",
-    "style.object.clearOverrides",
-    "style.cell.create",
-    "style.cell.edit",
-    "style.cell.apply",
-    "style.table.create",
-    "style.table.edit",
-    "style.table.apply",
-    "swatch.create",
-    "swatch.delete",
-    "swatch.options",
-    // Choosing what the next step acts on.
-    "selection.set",
-    "selection.toggle",
-    // Read-only.
-    "document.inspect",
-    "find.objects",
+    "table.distributeRows",
+    "table.options",
+    "table.convertRowsToHeader",
+    "table.convertRowsToBody",
+    "table.convertRowsToFooter",
+    "table.select",
+    "table.selectTable",
+    "table.selectRow",
+    "table.selectColumn",
+    "table.nextCell",
+    "table.prevCell",
+    "table.get",
+    // type
+    "type.tabs.add",
+    "type.tabs.move",
+    "type.tabs.change",
+    "type.tabs.remove",
+    "type.tabs.clear",
+    "type.tabs.repeat",
+    // text
+    "text.placeCaret",
+    "text.release",
+    "text.selectWord",
+    // type
+    "type.pickUpFormat",
+    // text
+    "text.selectSentence",
+    "text.selectParagraph",
+    "text.selectStory",
+    "text.select",
+    "text.insert",
+    "text.delete",
+    "text.move",
+    "text.exitToFrame",
+    // story
+    "story.setDirection",
+    "story.options",
+    "story.setText",
+    "story.replaceRange",
+    "story.get",
+    // type
+    "type.fillWithPlaceholder",
+    "type.char",
+    "type.kernPair",
+    "type.para",
+    "type.align",
+    "type.alignLeft",
+    "type.alignCenter",
+    "type.alignRight",
+    "type.justify",
+    "type.bold",
+    "type.italic",
+    "type.swapFillStroke",
+    "type.underline",
+    "type.allCaps",
+    "type.tateChuYoko",
+    "type.ruby",
+    "type.kenten",
+    "type.shatai",
+    "type.autoTateChuYoko",
+    "type.gridSettings",
+    "type.rotateRoman",
+    "type.romanWordBreak",
+    "type.warichu",
+    "type.storyDirection",
+    "type.kernStep",
+    "type.sizeUp",
+    "type.sizeDown",
+    "type.changeCase",
+    "type.openType",
+    // style
+    "style.breakLink",
+    // type
+    "type.openTypeFeatures",
+    "type.feature",
+    // text
+    "text.thread",
+    "text.unthread",
+    "text.removeFromThread",
+    // toc
+    "toc.generate",
+    "toc.update",
+    "toc.entries",
+    // page
+    "page.transition",
+    "page.transitions",
+    // variables
+    "variables.list",
+    "variables.define",
+    "variables.delete",
+    "variables.insert",
+    "variables.convertToText",
+    "variables.convertAllToText",
+    // xml
+    "xml.tags",
+    "xml.newTag",
+    "xml.deleteTag",
+    "xml.tagText",
+    "xml.tag",
+    "xml.mapStyle",
+    "xml.structure",
+    "xml.deleteDtd",
+    // xref
+    "xref.insert",
+    // anchor
+    "anchor.create",
+    // xref
+    "xref.list",
+    // anchor
+    "anchor.list",
+    // xref
+    "xref.formats",
+    "xref.defineFormat",
+    "xref.setFormat",
+    // color
+    "color.settings",
+    // data
+    "data.fields",
+    // edit
+    "edit.preview",
+    // font
+    "font.reload",
+    // footnote
+    "footnote.goToReference",
+    // guide
+    "guide.list",
+    "guide.select",
+    "guide.selectAll",
+    // layout
+    "layout.parents.edit",
+    "layout.selectPage",
+    // note
+    "note.next",
+    "note.previous",
+    // prefs
+    "prefs.set",
+    // table
+    "table.getCellStroke",
+    // text
+    "text.extendTo",
+    "text.selectAt",
+    // tool
+    "tool.polygonSettings",
+    // type
+    "type.selectionAttrs",
+    "type.tabs.get",
+    // view
+    "view.lockZeroPoint",
+    "view.zeroPoint",
+    // xml
+    "xml.validate",
 ];
 
 /// Commands the window itself provides.
 pub const ARGUMENT_COMMANDS: &[&str] = &[];
+
+/// Registry commands left OUT of the allow-list, grouped by the reason (the audit lists them; every registry command is in exactly one of the two).
+pub const LEFT_OUT: &[(&str, &[&str])] = &[
+    (
+        "files: opens, saves, exports, places or prints a file (files move only through the host)",
+        &["file.exportPdf", "file.exportEpub", "document.epubSplit", "file.exportFixedEpub", "file.printBooklet", "file.exportHtml", "file.exportPptx", "file.exportText", "file.new", "file.newSample", "file.presets", "file.savePreset", "file.deletePreset", "file.open", "file.openBytes", "file.openRecent", "file.recentFiles", "file.clearRecent", "file.save", "file.saveAs", "file.saveACopy", "file.revert", "file.recovery.list", "file.recovery.save", "file.recovery.open", "file.serialize", "file.close", "file.activate", "place.styles", "place.load", "place.drop", "file.place", "file.exportIdml", "file.openIdml", "file.printers", "file.exportXml", "file.importXml", "file.package", "file.print", "swatch.save"],
+    ),
+    (
+        "history: Undo and Redo are the person's",
+        &["edit.undo", "edit.redo"],
+    ),
+    (
+        "reads or writes a file on disk by path: scripts, snippets, Object Library and book files, relinking, colour profiles, swatch and style files, DTDs",
+        &["book.new", "book.open", "book.close", "book.add", "book.remove", "book.styleSource", "book.list", "book.paginate", "book.syncStyles", "book.exportPdf", "color.loadProfile", "snippet.export", "snippet.place", "library.new", "library.open", "library.list", "library.json", "library.add", "library.place", "library.remove", "library.close", "links.relink", "links.relinkFolder", "style.load", "links.copyTo", "script.run", "swatch.load", "xml.loadDtd"],
+    ),
+    (
+        "application commands (links, quit): not an edit of the document",
+        &["app.links"],
+    ),
+];
 
 /// Every command id a run may name, in the order the host's registry declares them.
 pub fn allowed() -> Vec<&'static str> {

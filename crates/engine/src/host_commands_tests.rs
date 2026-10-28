@@ -1,7 +1,7 @@
 use serde_json::{Value, json};
 
 use crate::cmd::find_command;
-use crate::host_commands::{ARGUMENT_COMMANDS, ASSISTANT_COMMANDS, allowed};
+use crate::host_commands::{ARGUMENT_COMMANDS, ASSISTANT_COMMANDS, LEFT_OUT, allowed};
 use crate::Session;
 
 fn session() -> Session {
@@ -110,4 +110,23 @@ fn a_read_only_run_leaves_no_undo_step_and_reads_back_what_was_made() {
 fn a_run_with_no_document_is_refused_by_name() {
     let mut s = Session::new();
     assert!(batch(&mut s, "x", json!([{ "name": "document.inspect" }])).unwrap_err().starts_with("no-document"));
+}
+
+#[test]
+fn every_registry_command_is_allowed_or_left_out_with_a_reason() {
+    let registry: std::collections::BTreeSet<&str> = crate::cmd::command_specs().iter().map(|s| s.id).collect();
+    let allowed: std::collections::BTreeSet<&str> = ASSISTANT_COMMANDS.iter().copied().collect();
+    let left: Vec<&str> = LEFT_OUT.iter().flat_map(|(_, ids)| ids.iter().copied()).collect();
+    for (reason, ids) in LEFT_OUT {
+        assert!(reason.len() > 20, "a command left out states why: {ids:?}");
+    }
+    let left_set: std::collections::BTreeSet<&str> = left.iter().copied().collect();
+    assert_eq!(left.len(), left_set.len(), "a command is left out under two reasons");
+    assert!(allowed.is_disjoint(&left_set), "allowed and left out overlap: {:?}", allowed.intersection(&left_set).collect::<Vec<_>>());
+    let accounted: std::collections::BTreeSet<&str> = allowed.union(&left_set).copied().collect();
+    let missing: Vec<&&str> = registry.difference(&accounted).collect();
+    let unknown: Vec<&&str> = accounted.difference(&registry).collect();
+    assert!(missing.is_empty(), "registry commands neither allowed nor left out: {missing:?}");
+    assert!(unknown.is_empty(), "listed commands the registry does not have: {unknown:?}");
+    assert_eq!(registry.len(), allowed.len() + left_set.len());
 }
