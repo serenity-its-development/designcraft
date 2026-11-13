@@ -399,10 +399,20 @@ impl Hosted {
     /// The host's asks for the bytes: the document as it stands, in the form a Save hands the host (an IDML package the host opened
     /// stays IDML), with nothing committed, journaled or marked saved.
     fn answer_exports(&self, app: &DesignApp) {
-        for request in self.bridge.take_exports() {
-            match designcraft_engine::cmd::host_export_bytes(&app.session, self.idml.get()) {
+        for (request, keep_original) in self.bridge.take_exports() {
+            // oneos files/044: an IDML package is not lossless for Layout, so auto-save keeps the .designcraft file beside it; IDML is
+            // written only when the person chose it, accepting the loss.
+            let idml = self.idml.get();
+            let losses = designcraft_engine::cmd::host_save_losses(idml);
+            let opened = self.bridge.opened_name();
+            let (as_name, as_idml) = if keep_original || losses.is_empty() {
+                (opened.clone(), idml)
+            } else {
+                (format!("{}.designcraft", opened.rsplit_once('.').map_or(opened.as_str(), |(stem, _)| stem)), false)
+            };
+            match designcraft_engine::cmd::host_export_bytes(&app.session, as_idml) {
                 Ok(bytes) => {
-                    if let Err(e) = self.bridge.post_export(&bytes, request) {
+                    if let Err(e) = self.bridge.post_export(&as_name, &bytes, request, &losses) {
                         log::warn!("Layout: the export could not be handed to the host: {e}");
                     }
                 }

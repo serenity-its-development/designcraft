@@ -151,6 +151,13 @@ fn serialized(st: &DocState) -> Result<Vec<u8>> {
     to_bytes(st.preview_stash.as_deref().unwrap_or(st.doc.as_ref()))
 }
 
+/// What the host's file would lose if auto-save wrote it in its own format (oneos files/044: auto-save writes only a format that loses
+/// nothing). A `.designcraft` file is the document itself and loses nothing. Layout's IDML writer does not state what it drops, so an
+/// IDML package is named plainly as not lossless: auto-save keeps the `.designcraft` file beside it, and IDML is the person's choice.
+pub fn host_save_losses(idml: bool) -> Vec<String> {
+    if idml { vec!["everything a Layout document holds (Layout's IDML package is not lossless)".to_string()] } else { Vec::new() }
+}
+
 /// The bytes the web build's Save hands its host for the active document, as it stands (`idml`: the host keeps the file as an
 /// IDML package, else as a `.designcraft` file): the answer to the OneOS host's ask for an export (auto-save, save on close).
 /// Nothing here is a save: the session is only read, so nothing is committed, journaled or marked saved.
@@ -1653,6 +1660,9 @@ mod save_tests {
         let exported = s.execute("file.exportIdml", &json!({})).unwrap();
         assert_eq!(idml, super::base64_decode(exported["base64"].as_str().unwrap()), "an IDML package as file.exportIdml writes it");
         assert_ne!(idml, native);
+        // files/044: the .designcraft file loses nothing; an IDML package is named plainly as not lossless for Layout.
+        assert!(super::host_save_losses(false).is_empty());
+        assert_eq!(super::host_save_losses(true).len(), 1);
         let st = s.active().unwrap();
         assert_eq!((st.revision, st.saved_revision, st.path.clone(), st.is_dirty()), before, "an export is not a save");
     }
