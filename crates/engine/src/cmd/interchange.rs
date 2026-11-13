@@ -26,10 +26,7 @@ pub fn specs() -> Vec<CommandSpec> {
 }
 
 fn export_idml(s: &mut Session, p: &Value) -> Result<Value> {
-    let st = s.doc()?;
-    let opts = designcraft_idml::ExportOptions { embed_images: p.get("embedImages").and_then(Value::as_bool).unwrap_or(true) };
-    let layer_doc = with_pdf_layer_variants(&st.doc, opts.embed_images)?;
-    let bytes = designcraft_idml::export_idml_with(layer_doc.as_ref().unwrap_or(&st.doc), &opts);
+    let bytes = idml_bytes(s.doc()?, p.get("embedImages").and_then(Value::as_bool).unwrap_or(true))?;
     match str_param(p, "path") {
         Some(path) => {
             #[cfg(not(target_arch = "wasm32"))]
@@ -38,6 +35,13 @@ fn export_idml(s: &mut Session, p: &Value) -> Result<Value> {
         }
         None => Ok(json!({"base64": base64_encode(&bytes), "bytes": bytes.len()})),
     }
+}
+
+/// The IDML package `file.exportIdml` writes for `st`, as it stands (it is only read).
+pub(crate) fn idml_bytes(st: &DocState, embed_images: bool) -> Result<Vec<u8>> {
+    let opts = designcraft_idml::ExportOptions { embed_images };
+    let layer_doc = with_pdf_layer_variants(&st.doc, opts.embed_images)?;
+    Ok(designcraft_idml::export_idml_with(layer_doc.as_ref().unwrap_or(&st.doc), &opts))
 }
 
 /// Whether a placement holds an Object Layer Options choice an export can still apply: a graphic

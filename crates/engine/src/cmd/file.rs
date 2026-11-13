@@ -79,10 +79,7 @@ pub fn specs() -> Vec<CommandSpec> {
             Ok(json!({"opened": crate::recovery::open(s, &dir)?}))
         }),
         cmd!(query "file.serialize", "Serialize", [], None, "{} → {base64, bytes} the .designcraft file", has_doc, |s, _| {
-            let st = s.doc()?;
-            // Preview fill is session state. Serialize the unfilled template.
-            let doc = st.preview_stash.as_deref().unwrap_or(st.doc.as_ref());
-            let bytes = to_bytes(doc)?;
+            let bytes = serialized(s.doc()?)?;
             Ok(json!({"base64": base64_encode(&bytes), "bytes": bytes.len()}))
         }),
         cmd!(noundo "file.close", "Close", ["File"], Some("Cmd+W"), "{index?}", has_doc, |s, p| {
@@ -149,6 +146,19 @@ thread_local! {
 }
 
 /// The document as `.designcraft` bytes, or an error when it can't be written; never an empty file.
+/// The `.designcraft` file `file.serialize` writes for `st`. Preview fill is session state: the unfilled template is serialized.
+fn serialized(st: &DocState) -> Result<Vec<u8>> {
+    to_bytes(st.preview_stash.as_deref().unwrap_or(st.doc.as_ref()))
+}
+
+/// The bytes the web build's Save hands its host for the active document, as it stands (`idml`: the host keeps the file as an
+/// IDML package, else as a `.designcraft` file): the answer to the OneOS host's ask for an export (auto-save, save on close).
+/// Nothing here is a save: the session is only read, so nothing is committed, journaled or marked saved.
+pub fn host_export_bytes(s: &Session, idml: bool) -> Result<Vec<u8>> {
+    let st = s.doc()?;
+    if idml { super::interchange::idml_bytes(st, true) } else { serialized(st) }
+}
+
 pub fn to_bytes(d: &Document) -> Result<Vec<u8>> {
     save_bytes(d, None)
 }
@@ -1617,6 +1627,35 @@ mod save_tests {
     use serde_json::json;
 
     use crate::Session;
+
+    /// The host's ask for the bytes (`craft:export`) is never a save: the bytes are what the web Save hands the host
+    /// (`file.serialize`, or `file.exportIdml` for an IDML package), and the document stays as it was (unsaved, same revision,
+    /// nothing journaled).
+    #[test]
+    fn an_export_for_the_host_is_the_bytes_of_a_save_and_leaves_the_document_unsaved() {
+        let mut s = Session::new();
+        assert!(super::host_export_bytes(&s, false).is_err(), "nothing is open yet");
+        s.execute("file.new", &json!({})).unwrap();
+        s.execute("frame.create", &json!({"rect": [36, 36, 300, 200], "content": "text", "text": "Kept by the host", "caret": false})).unwrap();
+        let before = {
+            let st = s.active().unwrap();
+            (st.revision, st.saved_revision, st.path.clone(), st.is_dirty())
+        };
+        assert!(before.3, "an edit leaves the document unsaved");
+        let journal = s.journal.len();
+        let native = super::host_export_bytes(&s, false).unwrap();
+        assert_eq!(native, super::host_export_bytes(&s, false).unwrap(), "asked twice, the same bytes");
+        let idml = super::host_export_bytes(&s, true).unwrap();
+        assert_eq!(s.journal.len(), journal, "an export journals nothing");
+        let serialized = s.execute("file.serialize", &json!({})).unwrap();
+        assert_eq!(native, super::base64_decode(serialized["base64"].as_str().unwrap()), "the bytes of the web Save");
+        assert!(super::from_bytes(&native).unwrap().stories.values().any(|st| st.text == "Kept by the host"));
+        let exported = s.execute("file.exportIdml", &json!({})).unwrap();
+        assert_eq!(idml, super::base64_decode(exported["base64"].as_str().unwrap()), "an IDML package as file.exportIdml writes it");
+        assert_ne!(idml, native);
+        let st = s.active().unwrap();
+        assert_eq!((st.revision, st.saved_revision, st.path.clone(), st.is_dirty()), before, "an export is not a save");
+    }
 
     /// Saving over an existing document replaces it whole and leaves nothing beside it.
     #[test]

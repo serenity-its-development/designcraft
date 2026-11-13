@@ -395,6 +395,21 @@ impl Hosted {
             app.status(notice);
         }
     }
+
+    /// The host's asks for the bytes: the document as it stands, in the form a Save hands the host (an IDML package the host opened
+    /// stays IDML), with nothing committed, journaled or marked saved.
+    fn answer_exports(&self, app: &DesignApp) {
+        for request in self.bridge.take_exports() {
+            match designcraft_engine::cmd::host_export_bytes(&app.session, self.idml.get()) {
+                Ok(bytes) => {
+                    if let Err(e) = self.bridge.post_export(&bytes, request) {
+                        log::warn!("Layout: the export could not be handed to the host: {e}");
+                    }
+                }
+                Err(e) => log::warn!("Layout: {} was not exported: {e}", self.bridge.opened_name()),
+            }
+        }
+    }
 }
 
 impl eframe::App for WebShell {
@@ -423,6 +438,7 @@ impl eframe::App for WebShell {
             self.app.logic(ctx);
             if let Some(h) = self.hosted.as_mut() {
                 h.run_commands(&mut self.app);
+                h.answer_exports(&self.app);
                 h.bridge.report_dirty(&self.app, &h.reported);
                 let doc = shown(&self.app);
                 let app = &mut self.app;
